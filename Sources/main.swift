@@ -15,7 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.menu = menu
         statusItem = item
         store.apply()
-        store.watcher.start()
         // Stay quiet at login once set up.
         if !store.config.enabled || !AXIsProcessTrusted() { showWindow() }
     }
@@ -23,10 +22,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         showWindow()
         return true
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        store.watcher.restore()
     }
 
     @objc private func showWindow() {

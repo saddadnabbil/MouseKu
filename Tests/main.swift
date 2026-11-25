@@ -69,18 +69,54 @@ r = Rig(ButtonConfig())
 check("unconfigured button passes through", ["\(r.engine.down(3))", "\(r.engine.up(3))", "\(r.engine.wheel(1))"],
       ["false", "false", "false"])
 
-func run(_ glide: inout Glide, frames: Int) -> [Int32] {
-    (0..<frames).map { _ in glide.step(dt: 1.0 / 60, stiffness: 14) }
+func run(_ glide: inout Glide, frames: Int = 600) -> [ScrollFrame] {
+    (0..<frames).flatMap { _ in glide.step(dt: 1.0 / 60) }
 }
+func total(_ f: [ScrollFrame]) -> Int { f.reduce(0) { $0 + Int($1.delta) } }
+/// Phase events collapsed to their order, e.g. B C E b c e.
+func shape(_ frames: [ScrollFrame]) -> String {
+    var out = ""
+    for f in frames {
+        let c = f.scroll != 0 ? [1: "B", 2: "C", 4: "E"][Int(f.scroll)]! : [1: "b", 2: "c", 3: "e"][Int(f.momentum)]!
+        if !out.hasSuffix(c) { out += c }
+    }
+    return out
+}
+
 var g = Glide()
-g.add(100)
-let steps = run(&g, frames: 120)
-check("glide travels the exact distance without overshoot",
-      ["\(steps.reduce(0, +))", "\(steps.allSatisfy { $0 >= 0 })", "\(g.isDone)"], ["100", "true", "true"])
+_ = g.add(100, smoothness: 0.8, coasts: false)
+var f = run(&g)
+check("precise glide travels the exact distance", ["\(total(f))", shape(f), "\(g.isDone)"], ["100", "BCE", "true"])
+
 g = Glide()
-g.add(100)
-_ = run(&g, frames: 5)
-g.add(-40)
-check("glide reverses immediately", ["\(run(&g, frames: 120).reduce(0, +))"], ["-40"])
+_ = g.add(100, smoothness: 0.8, coasts: true)
+f = run(&g)
+check("gesture then momentum, never backwards",
+      [shape(f), "\(f.allSatisfy { $0.delta >= 0 })", "\(total(f) >= 90)", "\(g.isDone)"], ["BCEbce", "true", "true", "true"])
+
+g = Glide()
+_ = g.add(300, smoothness: 0.8, coasts: true)
+_ = run(&g, frames: 15)
+let caught = g.add(-50, smoothness: 0.8, coasts: true)
+check("opposite tick catches a coasting page", [shape(caught), "\(total(caught))", "\(g.isDone)"], ["e", "0", "true"])
+
+g = Glide()
+_ = g.add(300, smoothness: 0.8, coasts: true)
+_ = run(&g, frames: 15)
+let again = g.add(50, smoothness: 0.8, coasts: true)
+f = run(&g)
+check("same direction tick continues without overshoot",
+      [shape(again), "\(f.allSatisfy { $0.delta >= 0 })", shape(f)], ["e", "true", "BCEbce"])
+
+g = Glide()
+_ = g.add(300, smoothness: 0.8, coasts: true)
+_ = run(&g, frames: 3)
+let turn = g.add(-100, smoothness: 0.8, coasts: true)
+f = run(&g)
+check("reversing mid-gesture turns immediately", [shape(turn), "\(f.allSatisfy { $0.delta <= 0 })"], ["E", "true"])
+
+let old = Config.load(Data(#"{"enabled":true,"speed":2}"#.utf8))
+check("old settings survive new options",
+      ["\(old.enabled)", "\(old.speed)", "\(old.trackpadSimulation)"], ["true", "2.0", "true"])
 
 exit(failures == 0 ? 0 : 1)

@@ -92,10 +92,12 @@ final class EventTap {
             flags.remove(.maskShift)
         }
         var distance = 50.0 * min(max(c.speed, 0.3), 3)  // stored value is untrusted
+        var coasts = true
         if c.optionPrecise && flags.contains(.maskAlternate) {
             distance = 10
             flags.remove(.maskAlternate)
             acceleration = 1
+            coasts = false
         } else {
             let now = ProcessInfo.processInfo.systemUptime
             acceleration = now - lastTick < 0.08 ? min(acceleration + 0.25, 3.5) : 1
@@ -109,7 +111,8 @@ final class EventTap {
         }
 
         if c.smooth {
-            scroller.add(x: x * distance, y: y * distance, smoothness: c.smoothness, flags: flags)
+            scroller.add(x: x * distance, y: y * distance, smoothness: c.smoothness, flags: flags,
+                         trackpad: c.trackpadSimulation, coasts: coasts)
         } else {
             Output.scroll(x: Int32(x * distance), y: Int32(y * distance), flags: flags)
         }
@@ -120,15 +123,15 @@ final class EventTap {
         let d = Double(store.config.reverse ? -direction : direction)
         switch mode {
         case .none: break
-        case .zoom: Output.zoom(direction)
-        case .horizontal: scroller.add(x: d * 60, y: 0, smoothness: 0.5, flags: [])
-        case .fast: scroller.add(x: 0, y: d * 300, smoothness: 0.5, flags: [])
+        case .zoom: Output.zoom(Int(d))
+        case .horizontal: scroller.add(x: d * 60, y: 0, smoothness: 0.5, flags: [], trackpad: false)
+        case .fast: scroller.add(x: 0, y: d * 300, smoothness: 0.5, flags: [], trackpad: false)
         case .desktop:
             // One toggle per scroll gesture, not one per wheel tick.
             let now = ProcessInfo.processInfo.systemUptime
             if now - lastDesktopToggle > 0.6 { Output.perform(Binding(action: .showDesktop)) }
             lastDesktopToggle = now
-        case .spaces: Output.perform(Binding(action: direction > 0 ? .spaceLeft : .spaceRight))
+        case .spaces: Output.perform(Binding(action: d > 0 ? .spaceLeft : .spaceRight))
         }
     }
 }

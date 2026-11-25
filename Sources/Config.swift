@@ -84,11 +84,25 @@ struct Config: Codable, Equatable {
         4: ButtonConfig(click: Binding(action: .forward), drag: .scroll, wheel: .zoom),
     ]
     var smooth = true
-    var reverse = false
+    var reverse = true     // mouse only; the trackpad keeps the system direction
     var speed = 1.0        // distance multiplier
     var smoothness = 0.8   // 0 = snappy, 1 = long glide
     var shiftHorizontal = true
     var commandZoom = true
     var optionPrecise = true
     var controlFast = true
+    var trackpadSimulation = true
+
+    /// Reads saved settings, keeping the defaults for options added after they were saved.
+    static func load(_ data: Data?) -> Config {
+        guard let data,
+              let saved = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let base = try? JSONEncoder().encode(Config()),
+              var merged = try? JSONSerialization.jsonObject(with: base) as? [String: Any]
+        else { return Config() }
+        merged.merge(saved) { _, new in new }
+        guard let json = try? JSONSerialization.data(withJSONObject: merged),
+              let config = try? JSONDecoder().decode(Config.self, from: json) else { return Config() }
+        return config
+    }
 }

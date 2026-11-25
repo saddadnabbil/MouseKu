@@ -25,11 +25,13 @@ enum Output {
         }
     }
 
-    static func scroll(x: Int32, y: Int32, flags: CGEventFlags = []) {
+    static func scroll(x: Int32, y: Int32, flags: CGEventFlags = [], phase: Int64 = 0, momentum: Int64 = 0) {
         guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel,
                               wheelCount: 2, wheel1: y, wheel2: x, wheel3: 0) else { return }
         e.flags = flags
         e.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+        e.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
+        e.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum)
         e.setIntegerValueField(.eventSourceUserData, value: syntheticMarker)
         e.post(tap: .cghidEventTap)
     }
@@ -70,17 +72,22 @@ enum Output {
 
 /// Replaces stepped wheel ticks with one pixel scroll per display refresh.
 final class SmoothScroller: NSObject {
-    private var x = Glide(), y = Glide()
+    private var glide = Glide()
+    private var horizontal = false
     private var flags: CGEventFlags = []
+    private var trackpad = true
     private var link: CADisplayLink?
     private var lastFrame: CFTimeInterval?
-    private var stiffness = 14.0
 
-    func add(x dx: Double, y dy: Double, smoothness: Double, flags: CGEventFlags) {
-        x.add(dx)
-        y.add(dy)
+    func add(x: Double, y: Double, smoothness: Double, flags: CGEventFlags,
+             trackpad: Bool, coasts: Bool = true) {
+        let sideways = abs(x) > abs(y)
+        if sideways != horizontal { post(glide.cancel()) }  // finish the other axis first
+        horizontal = sideways
         self.flags = flags
-        stiffness = 28 - 18 * min(max(smoothness, 0), 1)
+        self.trackpad = trackpad
+        post(glide.add(sideways ? x : y, smoothness: smoothness, coasts: coasts))
+        if glide.isDone { return stop() }
         if link == nil {
             let mouse = NSEvent.mouseLocation
             let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
@@ -90,19 +97,25 @@ final class SmoothScroller: NSObject {
     }
 
     func stop() {
+        post(glide.cancel())
         link?.invalidate()
         link = nil
         lastFrame = nil
-        x = Glide()
-        y = Glide()
     }
 
     @objc private func frame(_ link: CADisplayLink) {
         let dt = lastFrame.map { min(link.timestamp - $0, 0.05) } ?? link.duration
         lastFrame = link.timestamp
-        let px = x.step(dt: dt, stiffness: stiffness)
-        let py = y.step(dt: dt, stiffness: stiffness)
-        if px != 0 || py != 0 { Output.scroll(x: px, y: py, flags: flags) }
-        if x.isDone && y.isDone { stop() }
+        post(glide.step(dt: dt))
+        if glide.isDone { stop() }
+    }
+
+    private func post(_ frames: [ScrollFrame]) {
+        for f in frames {
+            // Without trackpad simulation the empty phase markers are not needed.
+            if !trackpad && f.delta == 0 { continue }
+            Output.scroll(x: horizontal ? f.delta : 0, y: horizontal ? 0 : f.delta, flags: flags,
+                          phase: trackpad ? f.scroll : 0, momentum: trackpad ? f.momentum : 0)
+        }
     }
 }

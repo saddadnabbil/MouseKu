@@ -14,13 +14,11 @@ final class Store: ObservableObject {
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var errorText: String?
 
-    let watcher = MouseWatcher()
     private lazy var tap = EventTap(store: self)
     private var poll: Timer?
 
     init() {
-        let data = UserDefaults.standard.data(forKey: "config")
-        config = data.flatMap { try? JSONDecoder().decode(Config.self, from: $0) } ?? Config()
+        config = Config.load(UserDefaults.standard.data(forKey: "config"))
     }
 
     /// Starts or stops the event tap and keeps watching the Accessibility permission.

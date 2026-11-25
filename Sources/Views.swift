@@ -31,23 +31,9 @@ struct GeneralView: View {
             Toggle("Launch at login", isOn: SwiftUI.Binding(
                 get: { store.launchAtLogin }, set: { store.setLaunchAtLogin($0) }))
             if let error = store.errorText { Text(error).foregroundColor(.red) }
-            MouseSection(watcher: store.watcher)
         }
         .toggleStyle(.switch)
         .formStyle(.grouped)
-    }
-}
-
-struct MouseSection: View {
-    @ObservedObject var watcher: MouseWatcher
-
-    var body: some View {
-        Section("External mouse") {
-            Toggle("Turn off natural scrolling while a mouse is connected", isOn: $watcher.autoDisableNatural)
-            Text(watcher.mice.isEmpty ? "No mouse connected"
-                 : "Connected: " + watcher.mice.joined(separator: ", "))
-                .foregroundColor(.secondary)
-        }
     }
 }
 
@@ -144,6 +130,8 @@ struct ScrollingView: View {
                 Slider(value: $store.config.smoothness, in: 0...1) { Text("Smoothness") }
                     .disabled(!store.config.smooth)
                 Slider(value: $store.config.speed, in: 0.3...3) { Text("Speed") }
+                Toggle("Trackpad simulation (momentum and bounce)", isOn: $store.config.trackpadSimulation)
+                    .disabled(!store.config.smooth)
                 Toggle("Reverse scroll direction", isOn: $store.config.reverse)
             }
             Section("Keyboard modifier + scroll") {
